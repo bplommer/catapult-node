@@ -16,7 +16,7 @@
 
 package org.typelevel.catapult
 
-import com.launchdarkly.sdk.{LDContext, LDUser}
+import facade.launchdarklyNodeServerSdk.mod.{LDContext, LDUser}
 import cats.Contravariant
 
 /** A typeclass for converting values of type `Ctx` into [[https://javadoc.io/doc/com.launchdarkly/launchdarkly-java-server-sdk/latest/com/launchdarkly/sdk/LDContext.html LDContext]]. An instance must be in scope when
@@ -39,7 +39,7 @@ object ContextEncoder {
       def contramap[A, B](fa: ContextEncoder[A])(f: B => A): ContextEncoder[B] = fa.contramap(f)
     }
 
-  implicit val catapultContextEncoderForLdContext: ContextEncoder[LDContext] = identity(_)
-
-  implicit val catapultContextEncoderForLdUser: ContextEncoder[LDUser] = LDContext.fromUser(_)
+  implicit def catapultContextEncoderForLdContext[Ctx <: LDContext]: ContextEncoder[Ctx] = identity(
+    _
+  )
 }

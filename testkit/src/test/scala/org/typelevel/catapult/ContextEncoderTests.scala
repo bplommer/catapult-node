@@ -16,24 +16,42 @@
 
 package org.typelevel.catapult
 
-import com.launchdarkly.sdk.{ContextKind, LDContext}
+import cats.syntax.all._
+import cats.Eq
+import facade.launchdarklyNodeServerSdk.mod.{LDContext, LDContextCommon, LDSingleKindContext}
 import weaver.SimpleIOSuite
 
 object ContextEncoderTests extends SimpleIOSuite {
+
+//  implicit def eqUndefor[A: Eq]: Eq[js.UndefOr[A]] = new Eq[js.UndefOr[A]] {
+//    override def eqv(x: UndefOr[A], y: UndefOr[A]): Boolean =
+//      if (x.isEmpty && y.isEmpty) true
+//      else if (x.isDefined && y.isDefined) x.get == y.get
+//      else false
+//  }
+//
+//  implicit val eqContext: cats.Eq[LDContext] = new Eq[LDContext] {
+//    override def eqv(x: LDContext, y: LDContext): Boolean =
+//      (x, y) match {
+//        case (x: LDSingleKindContext, y: LDSingleKindContext) =>
+//          x.kind === y.kind &&
+//          x.name === y.name // &&
+//        // x._meta === y._meta
+//      }
+//  }
+
   pureTest("contramap allows changing the input type of ContextEncoder") {
     // This is a trivial example - it would be just as simple to write a new ContextEncoder from scatch.
     case class Country(name: String)
 
     val enc = ContextEncoder[LDContext].contramap[Country](country =>
-      LDContext.builder(ContextKind.of("country"), country.name).build()
+      LDContext.LDSingleKindContext(country.name, "country")
     )
 
-    val franceCtx = LDContext.create(ContextKind.of("country"), "France")
-    val germanyCtx = LDContext.create(ContextKind.of("country"), "Germany")
+    val franceCtx: LDSingleKindContext = LDContext.LDSingleKindContext("France", "country")
 
-    expect.all(
-      enc.encode(Country("France")) == franceCtx,
-      enc.encode(Country("Germany")) == germanyCtx,
-    )
+    val result = enc.encode(Country("France")).asInstanceOf[LDSingleKindContext]
+
+    expect(result.name == franceCtx.name && result.kind === franceCtx.kind)
   }
 }

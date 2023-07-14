@@ -18,14 +18,24 @@ package org.typelevel.catapult
 
 import cats.effect.{Async, Resource}
 import cats.syntax.all._
-import com.launchdarkly.sdk.server.LDConfig
-import com.launchdarkly.sdk.server.integrations.TestData
+import facade.launchdarklyNodeServerSdk.integrationsMod.TestData
+import facade.launchdarklyNodeServerSdk.mod.LDOptions
+
+import scala.scalajs.js
+import scala.scalajs.js.JSON
+
+//import com.launchdarkly.sdk.server.LDConfig
+//import com.launchdarkly.sdk.server.integrations.TestData
 
 package object testkit {
   def testClient[F[_]](implicit F: Async[F]): Resource[F, (TestData, LaunchDarklyClient[F])] =
-    Resource.eval(F.delay(TestData.dataSource())).flatMap { td =>
+    Resource.eval(F.delay(TestData())).flatMap { td =>
+      val opts = LDOptions().setUpdateProcessor(td) // .setOffline(true)
+//      println(JSON.stringify(td))
+//      println(JSON.stringify(opts.updateProcessor))
+
       LaunchDarklyClient
-        .resource("fake-key", new LDConfig.Builder().dataSource(td).build)
+        .resource("fake-key", opts)
         .tupleLeft(td)
     }
 }

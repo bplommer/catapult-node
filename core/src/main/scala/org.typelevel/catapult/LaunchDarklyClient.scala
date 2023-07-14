@@ -16,13 +16,14 @@
 
 package org.typelevel.catapult
 
-import cats.effect.std.{Dispatcher, Queue}
 import cats.effect.{Async, Resource}
-import cats.~>
-import com.launchdarkly.sdk.server.interfaces.{FlagValueChangeEvent, FlagValueChangeListener}
-import com.launchdarkly.sdk.server.{LDClient, LDConfig}
-import com.launchdarkly.sdk.LDValue
-import fs2._
+import cats.syntax.all._
+import cats.{MonadThrow, ~>}
+import facade.launchdarklyNodeServerSdk.mod.LDClient
+
+import scala.scalajs.js
+import facade.launchdarklyNodeServerSdk.{mod => LaunchDarkly}
+import facade.launchdarklyNodeServerSdk.mod.LDOptions
 
 trait LaunchDarklyClient[F[_]] {
 
@@ -79,40 +80,36 @@ trait LaunchDarklyClient[F[_]] {
     * @param defaultValue the value to use if evaluation fails for any reason
     * @tparam Ctx the type representing the context; this can be [[https://javadoc.io/doc/com.launchdarkly/launchdarkly-java-server-sdk/latest/com/launchdarkly/sdk/LDContext.html LDContext]], [[https://javadoc.io/doc/com.launchdarkly/launchdarkly-java-server-sdk/latest/com/launchdarkly/sdk/LDUser.html LDUser]], or any type with a [[ContextEncoder]] instance in scope.
     * @return the flag value, suspended in the `F` effect. If evaluation fails for any reason, returns the default value.
-    * @see [[https://javadoc.io/doc/com.launchdarkly/launchdarkly-java-server-sdk/latest/com/launchdarkly/sdk/server/interfaces/LDClientInterface.html#jsonValueVariation(java.lang.String,com.launchdarkly.sdk.LDContext,com.launchdarkly.sdk.LDValue) LDClientInterface#jsonValueVariation]]
+    * @see [[https://javadoc.io/doc/com.launchdarkly/launchdarkly-java-server-sdk/latest/com/launchdarkly/sdk/server/interfaces/LDClientInterface.html#jsonValueVariation(java.lang.String,com.launchdarkly.sdk.LDContext,com.launchdarkly.sdk.Any) LDClientInterface#jsonValueVariation]]
     */
   def jsonVariation[Ctx: ContextEncoder](
       featureKey: String,
       context: Ctx,
-      defaultValue: LDValue,
-  ): F[LDValue]
-
-  /** @param featureKey   the key of the flag to be evaluated
-    * @param context      the context against which the flag is being evaluated
-    * @tparam Ctx the type representing the context; this can be [[https://javadoc.io/doc/com.launchdarkly/launchdarkly-java-server-sdk/latest/com/launchdarkly/sdk/LDContext.html LDContext]], [[https://javadoc.io/doc/com.launchdarkly/launchdarkly-java-server-sdk/latest/com/launchdarkly/sdk/LDUser.html LDUser]], or any type with a [[ContextEncoder]] instance in scope.
-    * @return A `Stream` of [[https://javadoc.io/doc/com.launchdarkly/launchdarkly-java-server-sdk/latest/com/launchdarkly/sdk/server/interfaces/FlagValueChangeEvent.html FlagValueChangeEvent]] instances representing changes to the value of the flag in the provided context. Note: if the flag value changes multiple times in quick succession, some intermediate values may be missed; for example, a change from 1` to `2` to `3` may be represented only as a change from `1` to `3`
-    * @see [[https://javadoc.io/doc/com.launchdarkly/launchdarkly-java-server-sdk/latest/com/launchdarkly/sdk/server/interfaces/FlagTracker.html FlagTracker]]
-    */
-  def listen[Ctx: ContextEncoder](featureKey: String, context: Ctx): Stream[F, FlagValueChangeEvent]
+      defaultValue: Any,
+  ): F[Any]
 
   /** @see [[https://javadoc.io/doc/com.launchdarkly/launchdarkly-java-server-sdk/latest/com/launchdarkly/sdk/server/interfaces/LDClientInterface.html#flush() LDClientInterface#flush]]
     */
   def flush: F[Unit]
 
-  def mapK[G[_]](fk: F ~> G): LaunchDarklyClient[G]
+  def mapK[G[_]: MonadThrow](fk: F ~> G): LaunchDarklyClient[G]
 }
 
 object LaunchDarklyClient {
-  def resource[F[_]](sdkKey: String, config: LDConfig)(implicit
+  def resource[F[_]](sdkKey: String, config: LDOptions)(implicit
       F: Async[F]
   ): Resource[F, LaunchDarklyClient[F]] =
     Resource
-      .fromAutoCloseable(F.blocking(new LDClient(sdkKey, config)))
+      .make(F.blocking(LaunchDarkly.init(sdkKey, config)))(cl =>
+        F.blocking(cl.close())
+      ) // (cl => F.fromPromise(F.delay(cl.flush())) >> F.blocking(cl.close()))
       .map(ldClient => defaultLaunchDarklyClient(ldClient))
 
   def resource[F[_]](sdkKey: String)(implicit F: Async[F]): Resource[F, LaunchDarklyClient[F]] =
     Resource
-      .fromAutoCloseable(F.blocking(new LDClient(sdkKey)))
+      .make(F.blocking(LaunchDarkly.init(sdkKey)))(cl =>
+        F.fromPromise(F.delay(cl.flush())) >> F.blocking(cl.close())
+      )
       .map(ldClient => defaultLaunchDarklyClient(ldClient))
 
   private def defaultLaunchDarklyClient[F[_]](
@@ -120,86 +117,70 @@ object LaunchDarklyClient {
   )(implicit F: Async[F]): LaunchDarklyClient.Default[F] =
     new LaunchDarklyClient.Default[F] {
 
-      override def unsafeWithJavaClient[A](f: LDClient => A): F[A] =
-        F.blocking(f(ldClient))
+      override def unsafeWithJavaClient[A](f: LDClient => js.Promise[A]): F[A] =
+        F.fromPromise(F.delay(f(ldClient)))
 
-      override def listen[Ctx](
-          featureKey: String,
-          context: Ctx,
-      )(implicit ctxEncoder: ContextEncoder[Ctx]): Stream[F, FlagValueChangeEvent] =
-        Stream.eval(F.delay(ldClient.getFlagTracker)).flatMap { tracker =>
-          Stream.resource(Dispatcher.sequential[F]).flatMap { dispatcher =>
-            Stream.eval(Queue.unbounded[F, FlagValueChangeEvent]).flatMap { q =>
-              val listener = new FlagValueChangeListener {
-                override def onFlagValueChange(event: FlagValueChangeEvent): Unit =
-                  dispatcher.unsafeRunSync(q.offer(event))
-              }
-
-              Stream.bracket(
-                F.delay(
-                  tracker.addFlagValueChangeListener(
-                    featureKey,
-                    ctxEncoder.encode(context),
-                    listener,
-                  )
-                )
-              )(listener => F.delay(tracker.removeFlagChangeListener(listener))) >>
-                Stream.fromQueueUnterminated(q)
-            }
-          }
-        }
     }
 
-  trait Default[F[_]] extends LaunchDarklyClient[F] {
+  private abstract class Default[F[_]: MonadThrow] extends LaunchDarklyClient[F] {
     self =>
-    protected def unsafeWithJavaClient[A](f: LDClient => A): F[A]
+
+    protected def unsafeWithJavaClient[A](f: LDClient => js.Promise[A]): F[A]
 
     override def boolVariation[Ctx](
         featureKey: String,
         context: Ctx,
         default: Boolean,
     )(implicit ctxEncoder: ContextEncoder[Ctx]): F[Boolean] =
-      unsafeWithJavaClient(_.boolVariation(featureKey, ctxEncoder.encode(context), default))
+      unsafeWithJavaClient(_.variation(featureKey, ctxEncoder.encode(context), default)).flatMap {
+        case b: Boolean => b.pure[F]
+        case _ => ???
+      }
 
     override def stringVariation[Ctx](
         featureKey: String,
         context: Ctx,
         default: String,
     )(implicit ctxEncoder: ContextEncoder[Ctx]): F[String] =
-      unsafeWithJavaClient(_.stringVariation(featureKey, ctxEncoder.encode(context), default))
+      unsafeWithJavaClient(_.variation(featureKey, ctxEncoder.encode(context), default)).flatMap {
+        case s: String => s.pure[F]
+        case _ => ???
+      }
 
     override def intVariation[Ctx](featureKey: String, context: Ctx, default: Int)(implicit
         ctxEncoder: ContextEncoder[Ctx]
     ): F[Int] =
-      unsafeWithJavaClient(_.intVariation(featureKey, ctxEncoder.encode(context), default))
+      unsafeWithJavaClient(_.variation(featureKey, ctxEncoder.encode(context), default)).flatMap {
+        case i: Int => i.pure[F]
+        case _ => ???
+      }
 
     override def doubleVariation[Ctx](
         featureKey: String,
         context: Ctx,
         default: Double,
     )(implicit ctxEncoder: ContextEncoder[Ctx]): F[Double] =
-      unsafeWithJavaClient(_.doubleVariation(featureKey, ctxEncoder.encode(context), default))
+      unsafeWithJavaClient(_.variation(featureKey, ctxEncoder.encode(context), default)).flatMap {
+        case d: Double => d.pure[F]
+        case _ => ???
+      }
 
     override def jsonVariation[Ctx](
         featureKey: String,
         context: Ctx,
-        default: LDValue,
-    )(implicit ctxEncoder: ContextEncoder[Ctx]): F[LDValue] =
-      unsafeWithJavaClient(_.jsonValueVariation(featureKey, ctxEncoder.encode(context), default))
+        default: Any,
+    )(implicit ctxEncoder: ContextEncoder[Ctx]): F[Any] =
+      unsafeWithJavaClient(_.variation(featureKey, ctxEncoder.encode(context), default))
 
     override def flush: F[Unit] = unsafeWithJavaClient(_.flush())
 
-    override def mapK[G[_]](fk: F ~> G): LaunchDarklyClient[G] = new LaunchDarklyClient.Default[G] {
-      override def unsafeWithJavaClient[A](f: LDClient => A): G[A] = fk(
-        self.unsafeWithJavaClient(f)
-      )
+    override def mapK[G[_]: MonadThrow](fk: F ~> G): LaunchDarklyClient[G] =
+      new LaunchDarklyClient.Default[G] {
+        override def unsafeWithJavaClient[A](f: LDClient => js.Promise[A]): G[A] = fk(
+          self.unsafeWithJavaClient(f)
+        )
 
-      override def listen[Ctx](featureKey: String, context: Ctx)(implicit
-          ctxEncoder: ContextEncoder[Ctx]
-      ): Stream[G, FlagValueChangeEvent] =
-        self.listen(featureKey, context).translate(fk)
-
-      override def flush: G[Unit] = fk(self.flush)
-    }
+        override def flush: G[Unit] = fk(self.flush)
+      }
   }
 }
