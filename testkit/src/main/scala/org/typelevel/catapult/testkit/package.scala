@@ -30,7 +30,7 @@ import scala.scalajs.js.JSON
 package object testkit {
   def testClient[F[_]](implicit F: Async[F]): Resource[F, (TestData, LaunchDarklyClient[F])] =
     Resource.eval(F.delay(TestData())).flatMap { td =>
-      val opts = LDOptions().setUpdateProcessor(td).setOffline(true)
+      val opts = LDOptions().setUpdateProcessor(td)//.setOffline(true)
 //      println(JSON.stringify(td))
 //      println(JSON.stringify(opts.updateProcessor))
 
