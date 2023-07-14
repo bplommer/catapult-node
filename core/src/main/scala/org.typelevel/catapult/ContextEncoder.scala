@@ -39,7 +39,7 @@ object ContextEncoder {
       def contramap[A, B](fa: ContextEncoder[A])(f: B => A): ContextEncoder[B] = fa.contramap(f)
     }
 
-  implicit val catapultContextEncoderForLdContext: ContextEncoder[LDContext] = identity(_)
-
-  implicit val catapultContextEncoderForLdUser: ContextEncoder[LDUser] = identity(_)
+  implicit def catapultContextEncoderForLdContext[Ctx <: LDContext]: ContextEncoder[Ctx] = identity(
+    _
+  )
 }

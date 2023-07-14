@@ -16,20 +16,14 @@
 
 package org.typelevel.catapult
 
-import cats.effect.std.{Dispatcher, Queue}
 import cats.effect.{Async, Resource}
 import cats.syntax.all._
 import cats.{MonadThrow, ~>}
 import facade.launchdarklyNodeServerSdk.mod.LDClient
 
-import scala.concurrent.duration.DurationInt
 import scala.scalajs.js
-//import com.launchdarkly.sdk.server.interfaces.{FlagValueChangeEvent, FlagValueChangeListener}
-//import com.launchdarkly.sdk.server.{LDClient, LDOptions}
-//import com.launchdarkly.sdk.Any
 import facade.launchdarklyNodeServerSdk.{mod => LaunchDarkly}
 import facade.launchdarklyNodeServerSdk.mod.LDOptions
-import fs2._
 
 trait LaunchDarklyClient[F[_]] {
 
@@ -94,14 +88,6 @@ trait LaunchDarklyClient[F[_]] {
       defaultValue: Any,
   ): F[Any]
 
-  /** @param featureKey   the key of the flag to be evaluated
-    * @param context      the context against which the flag is being evaluated
-    * @tparam Ctx the type representing the context; this can be [[https://javadoc.io/doc/com.launchdarkly/launchdarkly-java-server-sdk/latest/com/launchdarkly/sdk/LDContext.html LDContext]], [[https://javadoc.io/doc/com.launchdarkly/launchdarkly-java-server-sdk/latest/com/launchdarkly/sdk/LDUser.html LDUser]], or any type with a [[ContextEncoder]] instance in scope.
-    * @return A `Stream` of [[https://javadoc.io/doc/com.launchdarkly/launchdarkly-java-server-sdk/latest/com/launchdarkly/sdk/server/interfaces/FlagValueChangeEvent.html FlagValueChangeEvent]] instances representing changes to the value of the flag in the provided context. Note: if the flag value changes multiple times in quick succession, some intermediate values may be missed; for example, a change from 1` to `2` to `3` may be represented only as a change from `1` to `3`
-    * @see [[https://javadoc.io/doc/com.launchdarkly/launchdarkly-java-server-sdk/latest/com/launchdarkly/sdk/server/interfaces/FlagTracker.html FlagTracker]]
-    */
-  def listen(featureKey: String): Stream[F, Unit]
-
   /** @see [[https://javadoc.io/doc/com.launchdarkly/launchdarkly-java-server-sdk/latest/com/launchdarkly/sdk/server/interfaces/LDClientInterface.html#flush() LDClientInterface#flush]]
     */
   def flush: F[Unit]
@@ -114,12 +100,16 @@ object LaunchDarklyClient {
       F: Async[F]
   ): Resource[F, LaunchDarklyClient[F]] =
     Resource
-      .make(F.blocking(LaunchDarkly.init(sdkKey, config)))(cl => F.blocking(cl.close()))//(cl => F.fromPromise(F.delay(cl.flush())) >> F.blocking(cl.close()))
+      .make(F.blocking(LaunchDarkly.init(sdkKey, config)))(cl =>
+        F.blocking(cl.close())
+      ) // (cl => F.fromPromise(F.delay(cl.flush())) >> F.blocking(cl.close()))
       .map(ldClient => defaultLaunchDarklyClient(ldClient))
 
   def resource[F[_]](sdkKey: String)(implicit F: Async[F]): Resource[F, LaunchDarklyClient[F]] =
     Resource
-      .make(F.blocking(LaunchDarkly.init(sdkKey)))(cl => F.fromPromise(F.delay(cl.flush())) >> F.blocking(cl.close()))
+      .make(F.blocking(LaunchDarkly.init(sdkKey)))(cl =>
+        F.fromPromise(F.delay(cl.flush())) >> F.blocking(cl.close())
+      )
       .map(ldClient => defaultLaunchDarklyClient(ldClient))
 
   private def defaultLaunchDarklyClient[F[_]](
@@ -130,28 +120,6 @@ object LaunchDarklyClient {
       override def unsafeWithJavaClient[A](f: LDClient => js.Promise[A]): F[A] =
         F.fromPromise(F.delay(f(ldClient)))
 
-      override def listen(
-          featureKey: String
-      ): Stream[F, Unit] =
-        Stream.resource(Dispatcher.sequential[F]).flatMap { dispatcher =>
-          Stream.eval(Queue.unbounded[F, Unit]).flatMap { q =>
-            val key = s"update:$featureKey"
-            val listener: Any => Unit = _ => dispatcher.unsafeRunAndForget(q.offer(()))
-            Stream.bracket(
-              F.delay {
-                ldClient.on(key, listener)
-                println(s"added listener: ${ldClient.listeners(key)}")
-              }
-            )(_ =>
-              F.delay {
-                ldClient.removeAllListeners(s"update:$featureKey")
-                //                ldClient.removeAllListeners(s"update:$featureKey")
-              } >> F.sleep(1.second)
-                >> F.delay(println(s"removed listener: ${ldClient.listeners(key)}"))
-            ) >>
-              Stream.fromQueueUnterminated(q)
-          }
-        }
     }
 
   private abstract class Default[F[_]: MonadThrow] extends LaunchDarklyClient[F] {
@@ -211,9 +179,6 @@ object LaunchDarklyClient {
         override def unsafeWithJavaClient[A](f: LDClient => js.Promise[A]): G[A] = fk(
           self.unsafeWithJavaClient(f)
         )
-
-        override def listen(featureKey: String): Stream[G, Unit] =
-          self.listen(featureKey).translate(fk)
 
         override def flush: G[Unit] = fk(self.flush)
       }
