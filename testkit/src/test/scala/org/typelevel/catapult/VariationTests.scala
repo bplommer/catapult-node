@@ -19,7 +19,7 @@ package org.typelevel.catapult
 import cats.data.{Chain, NonEmptyChain}
 import cats.effect._
 import cats.effect.std.Supervisor
-import foobar.launchdarklyNodeServerSdk.mod.LDContext.LDUser
+import facade.launchdarklyNodeServerSdk.mod.LDContext.LDUser
 //import com.launchdarkly.sdk.server.interfaces.FlagValueChangeEvent
 //import com.launchdarkly.sdk.{LDUser, LDValue}
 import org.typelevel.catapult.testkit._

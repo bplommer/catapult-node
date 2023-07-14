@@ -20,15 +20,15 @@ import cats.effect.std.{Dispatcher, Queue}
 import cats.effect.{Async, Resource}
 import cats.syntax.all._
 import cats.{MonadThrow, ~>}
-import foobar.launchdarklyNodeServerSdk.mod.LDClient
+import facade.launchdarklyNodeServerSdk.mod.LDClient
 
 import scala.concurrent.duration.DurationInt
 import scala.scalajs.js
 //import com.launchdarkly.sdk.server.interfaces.{FlagValueChangeEvent, FlagValueChangeListener}
 //import com.launchdarkly.sdk.server.{LDClient, LDOptions}
 //import com.launchdarkly.sdk.Any
-import foobar.launchdarklyNodeServerSdk.{mod => LaunchDarkly}
-import foobar.launchdarklyNodeServerSdk.mod.LDOptions
+import facade.launchdarklyNodeServerSdk.{mod => LaunchDarkly}
+import facade.launchdarklyNodeServerSdk.mod.LDOptions
 import fs2._
 
 trait LaunchDarklyClient[F[_]] {

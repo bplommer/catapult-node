@@ -18,7 +18,7 @@ package org.typelevel.catapult
 
 import cats.syntax.all._
 import cats.Eq
-import foobar.launchdarklyNodeServerSdk.mod.{LDContext, LDContextCommon, LDSingleKindContext}
+import facade.launchdarklyNodeServerSdk.mod.{LDContext, LDContextCommon, LDSingleKindContext}
 import weaver.SimpleIOSuite
 
 object ContextEncoderTests extends SimpleIOSuite {

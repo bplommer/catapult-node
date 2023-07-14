@@ -18,8 +18,8 @@ package org.typelevel.catapult
 
 import cats.effect.{Async, Resource}
 import cats.syntax.all._
-import foobar.launchdarklyNodeServerSdk.integrationsMod.TestData
-import foobar.launchdarklyNodeServerSdk.mod.LDOptions
+import facade.launchdarklyNodeServerSdk.integrationsMod.TestData
+import facade.launchdarklyNodeServerSdk.mod.LDOptions
 
 import scala.scalajs.js
 import scala.scalajs.js.JSON

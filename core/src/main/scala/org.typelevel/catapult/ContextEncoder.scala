@@ -16,7 +16,7 @@
 
 package org.typelevel.catapult
 
-import foobar.launchdarklyNodeServerSdk.mod.{LDContext, LDUser}
+import facade.launchdarklyNodeServerSdk.mod.{LDContext, LDUser}
 import cats.Contravariant
 
 /** A typeclass for converting values of type `Ctx` into [[https://javadoc.io/doc/com.launchdarkly/launchdarkly-java-server-sdk/latest/com/launchdarkly/sdk/LDContext.html LDContext]]. An instance must be in scope when

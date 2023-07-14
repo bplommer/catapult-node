@@ -1,5 +1,5 @@
 // https://typelevel.org/sbt-typelevel/faq.html#what-is-a-base-version-anyway
-ThisBuild / tlBaseVersion := "0.4" // your current series x.y
+ThisBuild / tlBaseVersion := "0.0" // your current series x.y
 
 ThisBuild / organization := "org.typelevel"
 ThisBuild / organizationName := "Typelevel"
@@ -30,10 +30,8 @@ lazy val testkit = crossProject(JSPlatform)
     name := "catapult-testkit",
     libraryDependencies ++= Seq(
       "com.disneystreaming" %%% "weaver-cats" % "0.8.3" % Test,
-      "org.scalameta" %% "munit" % "0.7.29" % Test,
     ),
     testFrameworks += new TestFramework("weaver.framework.CatsEffect"),
-    tlVersionIntroduced := List("2.13", "3").map(_ -> "0.1.0").toMap,
   )
   .dependsOn(core)
 
@@ -50,14 +48,12 @@ lazy val core = crossProject(JSPlatform)
     ),
     libraryDependencies ++= Seq(
       "com.disneystreaming" %% "weaver-cats" % "0.8.3" % Test,
-      "org.scalameta" %% "munit" % "0.7.29" % Test,
     ),
     testFrameworks += new TestFramework("weaver.framework.CatsEffect"),
   )
-//  .jvmSettings(libraryDependencies += "com.launchdarkly" % "launchdarkly-java-server-sdk" % "6.2.0")
   .jsSettings(
-    externalNpm := baseDirectory.value / ".." / "..",
-    stOutputPackage := "foobar",
+//    externalNpm := baseDirectory.value / ".." / "..",
+    stOutputPackage := "facade",
     Compile / npmDependencies ++= Seq(
       "launchdarkly-node-server-sdk" -> "7.0.2"
     ),
