@@ -23,21 +23,23 @@ ThisBuild / scalaVersion := Scala213 // the default Scala
 
 lazy val root = tlCrossRootProject.aggregate(core, testkit)
 
-lazy val testkit = crossProject(JVMPlatform)
+lazy val testkit = crossProject(JSPlatform)
   .crossType(CrossType.Pure)
   .in(file("testkit"))
   .settings(
     name := "catapult-testkit",
     libraryDependencies ++= Seq(
-      "com.disneystreaming" %% "weaver-cats" % "0.8.3" % Test
+      "com.disneystreaming" %%% "weaver-cats" % "0.8.3" % Test,
+      "org.scalameta" %% "munit" % "0.7.29" % Test,
     ),
     testFrameworks += new TestFramework("weaver.framework.CatsEffect"),
     tlVersionIntroduced := List("2.13", "3").map(_ -> "0.1.0").toMap,
   )
   .dependsOn(core)
 
-lazy val core = crossProject(JVMPlatform)
+lazy val core = crossProject(JSPlatform)
   .crossType(CrossType.Pure)
+  .enablePlugins(ScalablyTypedConverterGenSourcePlugin)
   .in(file("core"))
   .settings(
     name := "catapult",
@@ -45,8 +47,22 @@ lazy val core = crossProject(JVMPlatform)
       "org.typelevel" %%% "cats-core" % "2.9.0",
       "org.typelevel" %%% "cats-effect" % "3.5.0",
       "co.fs2" %%% "fs2-core" % "3.7.0",
-      "com.launchdarkly" % "launchdarkly-java-server-sdk" % "6.2.0",
+    ),
+    libraryDependencies ++= Seq(
+      "com.disneystreaming" %% "weaver-cats" % "0.8.3" % Test,
+      "org.scalameta" %% "munit" % "0.7.29" % Test,
+    ),
+    testFrameworks += new TestFramework("weaver.framework.CatsEffect"),
+  )
+//  .jvmSettings(libraryDependencies += "com.launchdarkly" % "launchdarkly-java-server-sdk" % "6.2.0")
+  .jsSettings(
+    externalNpm := baseDirectory.value / ".." / "..",
+    stOutputPackage := "foobar",
+    Compile / npmDependencies ++= Seq(
+      "launchdarkly-node-server-sdk" -> "7.0.2"
     ),
   )
 
 lazy val docs = project.in(file("site")).enablePlugins(TypelevelSitePlugin)
+
+ThisBuild / scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.CommonJSModule) }
