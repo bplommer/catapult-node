@@ -62,3 +62,5 @@ lazy val core = crossProject(JSPlatform)
 lazy val docs = project.in(file("site")).enablePlugins(TypelevelSitePlugin)
 
 ThisBuild / scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.CommonJSModule) }
+
+ThisBuild / tlFatalWarnings := false
