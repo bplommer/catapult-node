@@ -34,7 +34,6 @@ package object testkit {
 //      println(JSON.stringify(td))
 //      println(JSON.stringify(opts.updateProcessor))
 
-
       LaunchDarklyClient
         .resource("fake-key", opts)
         .tupleLeft(td)

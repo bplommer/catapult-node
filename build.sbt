@@ -29,7 +29,7 @@ lazy val testkit = crossProject(JSPlatform)
   .settings(
     name := "catapult-testkit",
     libraryDependencies ++= Seq(
-      "com.disneystreaming" %%% "weaver-cats" % "0.8.3" % Test,
+      "com.disneystreaming" %%% "weaver-cats" % "0.8.3" % Test
     ),
     testFrameworks += new TestFramework("weaver.framework.CatsEffect"),
   )
@@ -47,7 +47,7 @@ lazy val core = crossProject(JSPlatform)
       "co.fs2" %%% "fs2-core" % "3.7.0",
     ),
     libraryDependencies ++= Seq(
-      "com.disneystreaming" %% "weaver-cats" % "0.8.3" % Test,
+      "com.disneystreaming" %% "weaver-cats" % "0.8.3" % Test
     ),
     testFrameworks += new TestFramework("weaver.framework.CatsEffect"),
   )
